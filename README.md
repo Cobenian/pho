@@ -1,36 +1,29 @@
 # pho
 
-FIXME: description
+An S3 File syncer
 
 ## Installation
 
-Download from http://example.com/FIXME.
-
+Build an uberjar, copy that to pho0.1/, put pho0.1 in your path
+Put your AWS access key an secret key to S3 in a file seperated by a space
 ## Usage
 
-FIXME: explanation
-
-    $ java -jar pho-0.1.0-standalone.jar [args]
+$ cd some_dir/you_wish_to_sink/
+$ pho --creds="/Users/adam/.s3.cobenian" --bucket="www.demoit.io" --sync
+$ echo "I changed my mind, I want to delete everything"
+$ pho --creds="/Users/adam/.s3.cobenian" --bucket="www.demoit.io" --delete
 
 ## Options
 
-FIXME: listing of options this app accepts.
-
-## Examples
-
-...
+None 
 
 ### Bugs
 
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
+Of course 
 
 ## License
 
-Copyright © 2015 FIXME
+Copyright © 2015 Cobenian 
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
