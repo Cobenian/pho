@@ -2,19 +2,62 @@
   (:require [pantomime.mime :refer [mime-type-of]])
   (:require [aws.sdk.s3 :as s3])
   (:require [clojure.tools.cli :refer [cli]])
+  (:import com.amazonaws.services.cloudfront.AmazonCloudFrontClient
+           com.amazonaws.auth.BasicAWSCredentials
+           com.amazonaws.ClientConfiguration
+           com.amazonaws.services.cloudfront.model.ListDistributionsRequest
+           com.amazonaws.services.cloudfront.model.ListDistributionsResult
+           com.amazonaws.services.cloudfront.model.DistributionList
+           com.amazonaws.services.cloudfront.model.DistributionSummary
+           com.amazonaws.services.cloudfront.model.CreateInvalidationRequest
+           com.amazonaws.services.cloudfront.model.CreateInvalidationResult
+           com.amazonaws.services.cloudfront.model.Invalidation
+           com.amazonaws.services.cloudfront.model.InvalidationBatch
+           com.amazonaws.services.cloudfront.model.Paths)
   (:gen-class))
 
+;;from: http://stackoverflow.com/q/16748447
+;; we don't need a uuid for this
+(defn gen-string[chunk-size, key-length]
+ (apply str
+  (flatten
+   (interpose "-"
+    (partition chunk-size
+     (take key-length
+      (repeatedly #(rand-nth "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"))))))))
 
-;;(def cred {:access-key "foof", :secret-key "kv7tfoofkey+w1WX"})
+(defn build-cf-client [creds]
+  (AmazonCloudFrontClient. (BasicAWSCredentials. (:access-key creds) (:secret-key creds))))
 
-;; Mime type detection by filename
-;;(mime-type-of "/Users/adam/Projects/demoit/emberit/dist/index.html")
+(defn list-distros [creds]
+  (println "Listing distros...")
+  (for [distro (.getItems (.getDistributionList
+                  (.listDistributions (build-cf-client creds) (ListDistributionsRequest.))))]
+        (println "Distro: " (.getId distro))))
+;;
+   ;;(list-distros (grab-creds "/Users/adam/.s3.cobenian"))
+
+
+(defn build-index-path []
+  (let [index-path (Paths.)]
+    (.setItems index-path (java.util.ArrayList. ["/index.html"]))
+    (.setQuantity index-path (Integer. 1))
+    index-path))
+
+(defn invalidate-index [creds which-distro]
+  (let [cf-client (build-cf-client creds)
+        index-path (build-index-path)]
+   (print "Invalidating index.html with ID: "
+     (.getId
+       (.getInvalidation
+         (.createInvalidation cf-client
+           (CreateInvalidationRequest. which-distro
+             (InvalidationBatch. index-path (gen-string 12 13)))))))))
 
 ;; Returns a list of the filenames in the bucket
 (defn pull-fnames-by-bucket [creds bucket-name]
    (map (fn [i] (:key i))
         (:objects (s3/list-objects creds bucket-name))))
-
 
 ;; dumps filenames to a specified file
 ;;(dump-fnames-to-file "/tmp/foo.txt3" (pull-fnames-by-bucket cred "www.demoit.io"))
@@ -25,22 +68,15 @@
         (.newLine w))))
 
 ;;;;;;;; Util Logs stuff -- very Cobenian specific
-;;;;
 ;; This is really bad, I hardcoded stuff...
 ;; transform into a transducer
-
 ;;(defn get-logs []
  ;; (filter (fn [i] (.contains i "logs")) (pull-fnames-by-bucket cred "www.demoit.io")))
-
 ;;get the log files
 ;;(dump-fnames-to-file "/tmp/logs4.txt" (get-logs))
-
 ;; delete logs
 ;;(defn delete-logs [creds bucket-name]
 ;;  (map (fn [key] (s3/delete-object creds bucket-name key)) (get-logs)))
-
-;; Didn't delete them all for some reason
-;;(delete-logs cred "www.foofer.io")
 
 ;; simply note it
 (defn note [file-name]
@@ -51,7 +87,6 @@
 (defn delete-all! [creds bucket-name]
   (println "Deleting all files on: " bucket-name ", please be patient...")
   (map #(s3/delete-object creds bucket-name (note %)) (pull-fnames-by-bucket creds bucket-name)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -95,17 +130,23 @@
   (try
   (let [[opts args banner]
           (cli args
-            ["-h" "--help" "specify --creds <file-with-creds> --bucket <bucketname> --sync|--delete"  :default false :flag true]
+            ["-h" "--help" "specify --creds=<file-with-creds> --bucket=<bucketname> [--invalidate-index=<CloudFrontDistroId> --list-distros] --sync|--delete"  :default false :flag true]
             ["-b" "--bucket" "Bucket Name"]
             ["-c" "--creds" "Credential File"]
+            ["-i" "--invalidate-index" "Invalidation Request"]
+            ["-l" "--list-distros" "List Distros" :flag true]
             ["-s" "--sync" "Sync cwd and below to S3" :flag true]
             ["-d" "--delete" "Delete the files on S3" :flag true])]
     (when (:help opts)
       (println banner))
     (when (:sync opts)
       (doall (push-sync (grab-creds (:creds opts)) (:bucket opts) ".")))
+    (when (:invalidate-index opts)
+      (doall (invalidate-index (grab-creds (:creds opts)) (:invalidate-index opts))))
     (when (:delete opts)
       (doall (delete-all! (grab-creds (:creds opts)) (:bucket opts))))
+    (when (:list-distros opts)
+      (doall (list-distros (grab-creds (:creds opts)))))
     (println "Exiting all done now"))
     (catch Exception e
       (println "Exception: " e)
