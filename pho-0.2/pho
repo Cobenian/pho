@@ -1,0 +1,2 @@
+#!/bin/sh
+java -jar "$(cd "$(dirname "$0")"; pwd)/pho-0.2.0-SNAPSHOT-standalone.jar" $@

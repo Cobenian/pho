@@ -13,7 +13,8 @@
            com.amazonaws.services.cloudfront.model.CreateInvalidationResult
            com.amazonaws.services.cloudfront.model.Invalidation
            com.amazonaws.services.cloudfront.model.InvalidationBatch
-           com.amazonaws.services.cloudfront.model.Paths)
+           com.amazonaws.services.cloudfront.model.Paths
+           java.io.File)
   (:gen-class))
 
 ;;from: http://stackoverflow.com/q/16748447
@@ -26,6 +27,23 @@
      (take key-length
       (repeatedly #(rand-nth "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"))))))))
 
+;;; Local file sync
+(defn get-names [file-s]
+  (map #(.getPath %) file-s))
+
+(defn just-files [file-s]
+  (filter #(.isFile %) file-s))
+
+(defn local-list [some-dir]
+  (get-names (just-files (file-seq (clojure.java.io/file some-dir)))))
+
+;; Removes the ./ if it appears in the key name
+(defn clean-if-dot [some-file-name]
+  (if (.startsWith some-file-name "./")
+    (subs some-file-name 2)
+    some-file-name))
+
+
 (defn build-cf-client [creds]
   (AmazonCloudFrontClient. (BasicAWSCredentials. (:access-key creds) (:secret-key creds))))
 
@@ -34,14 +52,15 @@
   (for [distro (.getItems (.getDistributionList
                   (.listDistributions (build-cf-client creds) (ListDistributionsRequest.))))]
         (println "Distro: " (.getId distro))))
-;;
-   ;;(list-distros (grab-creds "/Users/adam/.s3.cobenian"))
 
+(defn get-invalidation-files []
+  (vec (map #(str "/" %) (map #(clean-if-dot %) (local-list ".")))))
 
 (defn build-index-path []
-  (let [index-path (Paths.)]
-    (.setItems index-path (java.util.ArrayList. ["/index.html"]))
-    (.setQuantity index-path (Integer. 1))
+  (let [index-path (Paths.)
+        file-list (get-invalidation-files)]
+    (.setItems index-path (java.util.ArrayList. file-list))
+    (.setQuantity index-path (Integer. (count file-list)))
     index-path))
 
 (defn invalidate-index [creds which-distro]
@@ -80,7 +99,7 @@
 
 ;; simply note it
 (defn note [file-name]
-  (println "Deleteing " file-name)
+  (println "Deleting " file-name)
     file-name)
 
 ;; Now we need a delete all
@@ -90,26 +109,20 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;; Local file sync
-(defn get-names [file-s]
-  (map #(.getPath %) file-s))
 
-(defn just-files [file-s]
-  (filter #(.isFile %) file-s))
 
-(defn local-list [some-dir]
-  (get-names (just-files (file-seq (clojure.java.io/file some-dir)))))
-
-;; Removes the ./ if it appears in the key name
-(defn clean-if-dot [some-file-name]
-  (if (.startsWith some-file-name "./")
-    (subs some-file-name 2)
-    some-file-name))
+;; Unused for now
+(defn binary-read [some-file]
+  (with-open [reader (clojure.java.io/input-stream some-file)]
+    (let [length (.length (clojure.java.io/file some-file))
+          buffer (byte-array length)]
+      (.read reader buffer 0 length)
+      buffer)))
 
 ;; Filter out the dot (./) from the some-file
 (defn push-file [creds bucket-name some-file]
-  (println "pushing file: " some-file)
-  (let [file-content (slurp some-file)]
+  (println "Pushing file: " some-file)
+  (let [file-content (File. some-file)]
     (s3/put-object creds bucket-name (clean-if-dot some-file) file-content {:content-type (mime-type-of some-file)})))
 
 ;; example of push
@@ -147,7 +160,7 @@
       (doall (delete-all! (grab-creds (:creds opts)) (:bucket opts))))
     (when (:list-distros opts)
       (doall (list-distros (grab-creds (:creds opts)))))
-    (println "Exiting all done now"))
+    (println "\nExiting"))
     (catch Exception e
       (println "Exception: " e)
       ((System/exit 0)))))
