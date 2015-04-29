@@ -19,7 +19,9 @@
 
 ;;from: http://stackoverflow.com/q/16748447
 ;; we don't need a uuid for this
-(defn gen-string[chunk-size, key-length]
+(defn gen-string
+  "generates a random string of chunk-size and key-length"
+  [chunk-size, key-length]
  (apply str
   (flatten
    (interpose "-"
@@ -34,11 +36,14 @@
 (defn just-files [file-s]
   (filter #(.isFile %) file-s))
 
-(defn local-list [some-dir]
+(defn local-list
+  "Lists just the files in your current directory"
+  [some-dir]
   (get-names (just-files (file-seq (clojure.java.io/file some-dir)))))
 
-;; Removes the ./ if it appears in the key name
-(defn clean-if-dot [some-file-name]
+(defn clean-if-dot
+  "Removes the annoying ./ from the filename"
+  [some-file-name]
   (if (.startsWith some-file-name "./")
     (subs some-file-name 2)
     some-file-name))
@@ -53,28 +58,35 @@
                   (.listDistributions (build-cf-client creds) (ListDistributionsRequest.))))]
         (println "Distro: " (.getId distro))))
 
-(defn get-invalidation-files []
+(defn get-invalidation-files
+  "Gets a vector of files in the current dir and formats them for the invalidation listing"
+  []
   (vec (map #(str "/" %) (map #(clean-if-dot %) (local-list ".")))))
 
-(defn build-index-path []
+(defn build-index-path
+  "Sets up a Path for holding the invalidation listing. This is misnamed"
+  []
   (let [index-path (Paths.)
         file-list (get-invalidation-files)]
     (.setItems index-path (java.util.ArrayList. file-list))
     (.setQuantity index-path (Integer. (count file-list)))
     index-path))
 
-(defn invalidate-index [creds which-distro]
+(defn invalidate-index
+  "Invalidates all the files we just pushed that are in S3."
+  [creds which-distro]
   (let [cf-client (build-cf-client creds)
         index-path (build-index-path)]
-   (print "Invalidating index.html with ID: "
+   (print "Invalidating files with ID: "
      (.getId
        (.getInvalidation
          (.createInvalidation cf-client
            (CreateInvalidationRequest. which-distro
              (InvalidationBatch. index-path (gen-string 12 13)))))))))
 
-;; Returns a list of the filenames in the bucket
-(defn pull-fnames-by-bucket [creds bucket-name]
+(defn pull-fnames-by-bucket
+  "Returns a list of the filenames in the bucket"
+  [creds bucket-name]
    (map (fn [i] (:key i))
         (:objects (s3/list-objects creds bucket-name))))
 
