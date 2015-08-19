@@ -1,6 +1,6 @@
 # pho
 
-An S3 File syncer with CloudFront invalidation
+An S3 File syncer and CloudFront invalidater
 
 ## Installation
 
