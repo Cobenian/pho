@@ -91,23 +91,11 @@
         (:objects (s3/list-objects creds bucket-name))))
 
 ;; dumps filenames to a specified file
-;;(dump-fnames-to-file "/tmp/foo.txt3" (pull-fnames-by-bucket cred "www.demoit.io"))
 (defn dump-fnames-to-file [some-filename some-seq]
   (with-open [w (clojure.java.io/writer some-filename)]
     (doseq [line some-seq]
       (.write w line)
         (.newLine w))))
-
-;;;;;;;; Util Logs stuff -- very Cobenian specific
-;; This is really bad, I hardcoded stuff...
-;; transform into a transducer
-;;(defn get-logs []
- ;; (filter (fn [i] (.contains i "logs")) (pull-fnames-by-bucket cred "www.demoit.io")))
-;;get the log files
-;;(dump-fnames-to-file "/tmp/logs4.txt" (get-logs))
-;; delete logs
-;;(defn delete-logs [creds bucket-name]
-;;  (map (fn [key] (s3/delete-object creds bucket-name key)) (get-logs)))
 
 ;; simply note it
 (defn note [file-name]
